@@ -3,9 +3,8 @@
 interface
 
 uses
-  System.SysUtils,System.Classes,FireDAC.Stan.Intf, FireDAC.Stan.Option,
-  FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf,
-  FireDAC.DApt.Intf, Data.DB, FireDAC.Comp.DataSet, FireDAC.Comp.Client,
+  System.SysUtils,System.Classes,FireDAC.Stan.Intf,
+  Data.DB, FireDAC.Comp.Client,FireDAC.ConsoleUI.Wait,FireDAC.Comp.UI,
   FireDAC.Comp.BatchMove.Text,FireDAC.Comp.BatchMove.Dataset,FireDAC.Comp.BatchMove;
 
 type
@@ -13,17 +12,21 @@ type
   ///   FireDAC を利用した CSV 解析コンポーネント。
   ///   VCL / FMX への依存なし。
   /// </summary>
+
   TFDCSVAnalyzer = class(TComponent)
   public
+
     constructor Create(AOwner: TComponent;MaxFieldLength : integer = 1024); overload;
     destructor Destroy; override;
   private
+    FCursor : TFDGUIxWaitCursor;
     FDataSet: TFDMemTable;
     FSeparator: Char;
     FWithFieldNames: Boolean;
     FEncoding : TFDEncoding;
     FFields : TStringList;
     FMaxLength : integer;
+    FDelimiter : Char;
   public
     /// <summary>指定した CSV ファイルを読み込み、DataSet に格納する</summary>
     procedure LoadCSV(AFileName: TFileName);
@@ -45,6 +48,9 @@ type
     /// <summary>フィールド区切り文字（デフォルト: ','）</summary>
     property Separator: Char read FSeparator write FSeparator default ',';
 
+    /// <summary>囲い文字（デフォルト: '"'）</summary>
+    property Delimiter :Char read FDelimiter write FDelimiter default '"';
+
     /// <summary>先頭行をヘッダー（フィールド名）として扱うか（デフォルト: True）</summary>
     property WithFieldNames: Boolean read FWithFieldNames write FWithFieldNames default True;
 
@@ -58,8 +64,11 @@ implementation
 
 constructor TFDCSVAnalyzer.Create(AOwner: TComponent;MaxFieldLength : integer = 1024);
 begin
-
+  inherited Create(AOwner);
   FSeparator := ',';
+  FDelimiter := '"';
+  FCursor := TFDGUIxWaitCursor.Create(self);
+  FCursor.Provider := 'Console';
   FWithFieldNames := True;
   FEncoding := ecDefault;
   FDataSet := TFDMemTable.Create(Self);
@@ -70,7 +79,7 @@ end;
 
 destructor TFDCSVAnalyzer.Destroy;
 begin
-  FDataSet.Free;
+
   FFields.Free;
   inherited Destroy;
 end;
@@ -101,7 +110,7 @@ begin
     LReader.FileName := AFileName;
     LReader.DataDef.Separator := FSeparator;
     LReader.DataDef.WithFieldNames := FWithFieldNames;
-    LReader.DataDef.Delimiter      := '"';
+    LReader.DataDef.Delimiter      := FDelimiter;
     //基本は文字コード自動認識、必要な場合は事前にFEncodingにセットしておく
     LReader.Encoding := FEncoding;
 
@@ -113,6 +122,7 @@ begin
 
     // CSV 構造を解析してデータを転送
     if FWithFieldNames then begin
+
       LBatchMove.GuessFormat;
       //上位に短いデータしかない場合文字の切り捨てが発生するのでフィールドサイズを拡張
       for i := 0 to LReader.DataDef.Fields.Count - 1 do begin
