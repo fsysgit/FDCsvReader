@@ -2,6 +2,8 @@
 
 FireDAC の `TFDBatchMove` を利用した、軽量な CSV 解析コンポーネント (Delphi)。
 VCL / FMX に依存しないため、コンソールアプリやサービス、ライブラリ内部からも利用できます。
+※日本語CSVの場合Shift-JS（SJIS、CP932等）はFireDACの内部実装的に非対応です。
+事前にUTF8（BOM付き）に変換してご利用ください。
 
 A lightweight CSV reader component for Delphi, built on top of FireDAC's `TFDBatchMove`.
 No VCL / FMX dependency — usable from console apps, services, and libraries.
@@ -50,7 +52,8 @@ var
 begin
   Analyzer := TFDCSVAnalyzer.Create(nil);
   try
-    Analyzer.Separator      := ',';
+    Analyzer.Separator      := ',';         //区切り文字
+    Analyzer.Delimiter      := '"';         //囲い文字
     Analyzer.WithFieldNames := True;        // 1 行目をフィールド名として扱う
     Analyzer.Encoding       := ecUTF8;      // 必要に応じて指定 (既定: ecDefault = 自動認識)
 
@@ -117,6 +120,7 @@ Analyzer.MaxLength := 8192;
 | `Fields` | `TStringList` (read) | 手動指定用フィールド名リスト |
 | `MaxLength` | `Integer` | 文字列フィールドの最大長 |
 | `Separator` | `Char` (published) | 区切り文字 (既定 `,`) |
+| `Delimiter` | `Char` (published) | 囲い文字 (既定 `"`) |
 | `WithFieldNames` | `Boolean` (published) | 1 行目をヘッダーとして扱う (既定 `True`) |
 | `Encoding` | `TFDEncoding` (published) | エンコーディング (既定 `ecDefault` = 自動認識) |
 
