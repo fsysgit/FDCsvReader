@@ -2,11 +2,12 @@
 
 FireDAC の `TFDBatchMove` を利用した、軽量な CSV 解析コンポーネント (Delphi)。
 VCL / FMX に依存しないため、コンソールアプリやサービス、ライブラリ内部からも利用できます。
-※日本語CSVの場合Shift-JIS（SJIS、CP932等）はFireDACの内部実装的に非対応です。
-事前にUTF8（BOM付き）に変換してご利用ください。
+重複したヘッダを持つCSVにも対応。
+>※日本語CSVの場合Shift-JIS（SJIS、CP932等）はFireDACの内部実装的に非対応です。
+>事前にUTF8（BOM付き）に変換してご利用ください。
 
 A lightweight CSV reader component for Delphi, built on top of FireDAC's `TFDBatchMove`.
-No VCL / FMX dependency — usable from console apps, services, and libraries.
+No VCL / FMX dependency — usable from console apps, services, and libraries,It also supports CSV files with duplicate headers.
 > Note: Due to FireDAC's internal text parser behavior, legacy Japanese
 > encodings such as Shift-JIS / CP932 are **not reliably supported**.
 > Please convert your CSV files to UTF-8 (BOM recommended) before loading.
@@ -20,6 +21,7 @@ No VCL / FMX dependency — usable from console apps, services, and libraries.
 - **ヘッダー行の自動認識**(`WithFieldNames`)、またはフィールド名を手動指定する両モードに対応
 - **区切り文字、囲み文字、エンコーディング** をプロパティで指定可能
 - **最大フィールド長(`MaxLength`)を拡張** — 上位行に短いデータしかない場合に発生する文字の切り捨てを防止
+- **重複したヘッダを持つCSVにも対応
 - 単一ユニット (`FS.FireDAC.CSVReader.pas`) で完結
 
 ---
@@ -102,7 +104,7 @@ end;
 var
   Analyzer: TFDCSVAnalyzer;
 begin
-  Analyzer := TFDCSVAnalyzer.Create(nil);
+  Analyzer := TFDCSVAnalyzer.Create(nil,1024,512); //第三引数は仮フィールドの数
   try
     Analyzer.Separator      := ',';         //区切り文字
     Analyzer.Delimiter      := '"';         //囲い文字
@@ -135,7 +137,7 @@ Analyzer.MaxLength := 8192;
 
 | メンバー | 種別 | 説明 |
 |---|---|---|
-| `Create(AOwner; MaxFieldLength = 1024)` | constructor | コンポーネントを生成 |
+| `Create(AOwner; MaxFieldLength = 1024; MaxFieldCount = 256)` | constructor | コンポーネントを生成 |
 | `LoadCSV(AFileName)` | method | CSV ファイルを読み込み `DataSet` に格納 |
 | `Clear` | method | `DataSet` の内容をクリア |
 | `SetFields(AFields)` | method | 改行区切り文字列でフィールド名を一括設定 |
@@ -166,7 +168,12 @@ Analyzer.MaxLength := 8192;
 | `WithFieldNames = fhmWithOut` かつ `Fields` が空 | `Exception` |
 
 ### 更新履歴
-WithFieldNamesを破壊的変更 boolean -> Enum(fhmFollow,fhmWithOut,fhmWithDuplicate)
+
+| 説明 | 詳細 |
+|---|---|
+|重複ヘッダモードの場合の利便性の為コンストラクタを変更|MaxFieldCountを指定できるよう変更 規定値256、大きなサイズが必要な場合はCreate時に指定|
+|WithFieldNamesを破壊的変更| boolean -> Enum(fhmFollow,fhmWithOut,fhmWithDuplicate)|
+
 
 ---
 

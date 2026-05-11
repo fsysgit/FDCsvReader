@@ -16,12 +16,12 @@ type
   //follow : CSVの1行目をヘッダとして読み込みます。重複したヘッダがあると読み込み時エラーになります。
   //withOut : ヘッダを考慮せず連番ヘッダを割り当てます。（1行目がヘッダの場合ヘッダもデータとして扱われます）
   //withDuplicate : CSVの1行目をヘッダとして重複したヘッダを連番ヘッダに置き換えて読み込みます。エラーは出ませんがCSVとは違うヘッダが設定されます。
-  TfsHeaderMode = (fhmFollow,fhmWithOut,fhmWithDuplicate);
+  TfsHeaderMode = (fhmFollow,fhmManual,fhmWithDuplicate);
 
   TFDCSVAnalyzer = class(TComponent)
   public
 
-    constructor Create(AOwner: TComponent;MaxFieldLength : integer = 1024); overload;
+    constructor Create(AOwner: TComponent;MaxFieldLength : integer = 1024;MaxFieldCount : integer = 256); overload;
     destructor Destroy; override;
   private
     FCursor : TFDGUIxWaitCursor;
@@ -77,7 +77,7 @@ implementation
 
 { TFDCSVAnalyzer }
 
-constructor TFDCSVAnalyzer.Create(AOwner: TComponent;MaxFieldLength : integer = 1024);
+constructor TFDCSVAnalyzer.Create(AOwner: TComponent;MaxFieldLength : integer = 1024;MaxFieldCount : integer = 256);
 begin
   inherited Create(AOwner);
   FSeparator := ',';
@@ -90,7 +90,7 @@ begin
   FFields := TStringList.Create;
   FMaxLength := MaxFieldLength;
   FTruncateField := true;
-  FMaxFieldCount := 256;
+  FMaxFieldCount := MaxFieldCount;
 end;
 
 
@@ -114,7 +114,7 @@ begin
   if not FileExists(AFileName) then
     raise EFileNotFoundException.CreateFmt('CSV file not found: %s', [AFileName]);
 
-  if (FWithFieldNames = fhmWithOut) and (FFields.Count = 0) then
+  if (FWithFieldNames = fhmManual) and (FFields.Count = 0) then
     raise Exception.Create('フィールド自動認識がオフの場合はフィールド名をセットしてください。');
 
   // 既存データをクリア
@@ -194,8 +194,12 @@ begin
       FDataSet.CreateDataSet;
     end;
 
-    LBatchMove.Execute;
-
+    try
+      LBatchMove.Execute;
+    except
+      if assigned(tempDataSet) then tempDataSet.Free;
+      raise;   //exit
+    end;
     if FWithFieldNames = fhmWithDuplicate then SetFieldNameAndTruncFields(tempDataSet) else FDataSet.First;
 
   finally
@@ -230,7 +234,7 @@ begin
           HeaderCount[ADataSet.Fields[i].AsWideString] := cnt + 1;
           Headers.Add(ADataSet.Fields[i].AsWideString + HeaderCount[ADataSet.Fields[i].AsWideString].ToString);
         end else begin
-          HeaderCount.Add(ADataSet.Fields[i].AsWideString,1);
+          HeaderCount.Add(ADataSet.Fields[i].AsWideString,0);
           Headers.Add(ADataSet.Fields[i].AsWideString);
         end;
         
@@ -273,7 +277,7 @@ begin
     FreeAndNil(Headers);
     FreeAndNil(HeaderCount);
     //テンポラリをFreeする
-    ADataSet.Free;
+    FreeAndNil(ADataSet);
   end;
   
   
