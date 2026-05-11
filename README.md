@@ -121,18 +121,31 @@ Analyzer.MaxLength := 8192;
 | `SetFields(AFields)` | method | 改行区切り文字列でフィールド名を一括設定 |
 | `DataSet` | `TFDMemTable` (read) | 読み込み結果を保持するメモリテーブル |
 | `Fields` | `TStringList` (read) | 手動指定用フィールド名リスト |
+| `MaxFieldCount` | `Integer` (property) | 重複ヘッダの場合、テンポラリとして一旦保存するカラム数 (既定 `256`) |
+| `TruncateField` | `boolean` (property) | 仮フィールドの切り捨てを行うかどうか (既定 `true`) |
 | `MaxLength` | `Integer` | 文字列フィールドの最大長 |
 | `Separator` | `Char` (published) | 区切り文字 (既定 `,`) |
 | `Delimiter` | `Char` (published) | 囲い文字 (既定 `"`) |
-| `WithFieldNames` | `Boolean` (published) | 1 行目をヘッダーとして扱う (既定 `True`) |
-| `Encoding` | `TFDEncoding` (published) | エンコーディング (既定 `ecDefault` = 自動認識) |
+| `WithFieldNames` | `Enum` (published) | 1 行目をヘッダーとして扱う/重複をリネームする/ヘッダを手動で設定する (既定 `ヘッダーとして扱う`) |
+| `Encoding` | `TFDEncoding` (published) | エンコーディング (既定 `ecDefault` = OSデフォルトコードページ) |
+
+### ヘッダモード / HeaderMode
+
+| メンバー | 説明 |
+|`fhmFollow` | CSVに従う（1行目がヘッダ） |
+|`fhmWithOut` | ヘッダを手動設定する |
+|`fhmWithDuplicate` | 重複ヘッダをリネームする |
+
 
 ### 例外 / Exceptions
 
 | 状況 | 例外 |
 |---|---|
 | 指定ファイルが存在しない | `EFileNotFoundException` |
-| `WithFieldNames = False` かつ `Fields` が空 | `Exception` |
+| `WithFieldNames = fhmWithOut` かつ `Fields` が空 | `Exception` |
+
+### 更新履歴
+WithFieldNamesを破壊的変更 boolean -> Enum(fhmFollow,fhmWithOut,fhmWithDuplicate)
 
 ---
 
