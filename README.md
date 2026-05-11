@@ -7,7 +7,7 @@ VCL / FMX に依存しないため、コンソールアプリやサービス、�
 >事前にUTF8（BOM付き）に変換してご利用ください。
 
 A lightweight CSV reader component for Delphi, built on top of FireDAC's `TFDBatchMove`.
-No VCL / FMX dependency — usable from console apps, services, and libraries , it also supports CSV files with duplicate headers.
+No VCL / FMX dependency — usable from console apps, services, and libraries. it also supports CSV files with duplicate headers.
 > Note: Due to FireDAC's internal text parser behavior, legacy Japanese
 > encodings such as Shift-JIS / CP932 are **not reliably supported**.
 > Please convert your CSV files to UTF-8 (BOM recommended) before loading.
@@ -165,7 +165,7 @@ Analyzer.MaxLength := 8192;
 | 状況 | 例外 |
 |---|---|
 | 指定ファイルが存在しない | `EFileNotFoundException` |
-| `WithFieldNames = fhmWithOut` かつ `Fields` が空 | `Exception` |
+| `WithFieldNames = fhmManual` かつ `Fields` が空 | `Exception` |
 
 ### 更新履歴
 
