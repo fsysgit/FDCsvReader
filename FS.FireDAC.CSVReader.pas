@@ -19,6 +19,7 @@ type
   TfsHeaderMode = (fhmFollow,fhmManual,fhmWithDuplicate);
 
   TFDCSVAnalyzer = class(TComponent)
+
   public
 
     constructor Create(AOwner: TComponent;MaxFieldLength : integer = 1024;MaxFieldCount : integer = 256); overload;
@@ -111,6 +112,8 @@ var
   tempDataSet : TFDMemTable;
   i : integer;
 begin
+  tempDataSet := nil;
+
   if not FileExists(AFileName) then
     raise EFileNotFoundException.CreateFmt('CSV file not found: %s', [AFileName]);
 

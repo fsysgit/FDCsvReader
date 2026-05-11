@@ -7,7 +7,7 @@ VCL / FMX に依存しないため、コンソールアプリやサービス、�
 >事前にUTF8（BOM付き）に変換してご利用ください。
 
 A lightweight CSV reader component for Delphi, built on top of FireDAC's `TFDBatchMove`.
-No VCL / FMX dependency — usable from console apps, services, and libraries,It also supports CSV files with duplicate headers.
+No VCL / FMX dependency — usable from console apps, services, and libraries , it also supports CSV files with duplicate headers.
 > Note: Due to FireDAC's internal text parser behavior, legacy Japanese
 > encodings such as Shift-JIS / CP932 are **not reliably supported**.
 > Please convert your CSV files to UTF-8 (BOM recommended) before loading.
@@ -21,7 +21,7 @@ No VCL / FMX dependency — usable from console apps, services, and libraries,It
 - **ヘッダー行の自動認識**(`WithFieldNames`)、またはフィールド名を手動指定する両モードに対応
 - **区切り文字、囲み文字、エンコーディング** をプロパティで指定可能
 - **最大フィールド長(`MaxLength`)を拡張** — 上位行に短いデータしかない場合に発生する文字の切り捨てを防止
-- **重複したヘッダを持つCSVにも対応
+- **重複したヘッダを持つCSVにも対応**
 - 単一ユニット (`FS.FireDAC.CSVReader.pas`) で完結
 
 ---
@@ -84,7 +84,7 @@ var
 begin
   Analyzer := TFDCSVAnalyzer.Create(nil);
   try
-    Analyzer.WithFieldNames := fhmWithOut;
+    Analyzer.WithFieldNames := fhmManual;
 
     // 改行区切りでフィールド名を設定
     Analyzer.SetFields('ID'#13#10'Name'#13#10'Email');
@@ -172,7 +172,7 @@ Analyzer.MaxLength := 8192;
 | 説明 | 詳細 |
 |---|---|
 |重複ヘッダモードの場合の利便性の為コンストラクタを変更|MaxFieldCountを指定できるよう変更 規定値256、大きなサイズが必要な場合はCreate時に指定|
-|WithFieldNamesを破壊的変更| boolean -> Enum(fhmFollow,fhmWithOut,fhmWithDuplicate)|
+|WithFieldNamesを破壊的変更| boolean -> Enum(fhmFollow,fhmManual,fhmWithDuplicate)|
 
 
 ---
