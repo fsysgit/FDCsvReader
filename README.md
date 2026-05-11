@@ -57,7 +57,7 @@ begin
   try
     Analyzer.Separator      := ',';         //区切り文字
     Analyzer.Delimiter      := '"';         //囲い文字
-    Analyzer.WithFieldNames := True;        // 1 行目をフィールド名として扱う
+    Analyzer.WithFieldNames := fhmFollow;        // CSVに従う（1 行目をフィールド名として扱う）
     Analyzer.Encoding       := ecUTF8;      // 必要に応じて指定 (既定: ecDefault = 自動認識)
 
     Analyzer.LoadCSV('C:\data\sample.csv');
@@ -82,7 +82,7 @@ var
 begin
   Analyzer := TFDCSVAnalyzer.Create(nil);
   try
-    Analyzer.WithFieldNames := False;
+    Analyzer.WithFieldNames := fhmWithOut;
 
     // 改行区切りでフィールド名を設定
     Analyzer.SetFields('ID'#13#10'Name'#13#10'Email');
@@ -96,7 +96,27 @@ begin
 end;
 ```
 
-### 3. 長いフィールドへの対応
+### 3. ヘッダーが重複した CSV を読み込む
+
+```pascal
+var
+  Analyzer: TFDCSVAnalyzer;
+begin
+  Analyzer := TFDCSVAnalyzer.Create(nil);
+  try
+    Analyzer.Separator      := ',';         //区切り文字
+    Analyzer.Delimiter      := '"';         //囲い文字
+    Analyzer.WithFieldNames := fhmWithDuplicate;  // 1 行目をフィールド名として扱い、重複を自動リネームする
+    Analyzer.Encoding       := ecUTF8;      // 必要に応じて指定 (既定: ecDefault = 自動認識)
+
+    Analyzer.LoadCSV('C:\data\sample.csv');
+  finally
+    Analyzer.Free;
+  end;
+end;
+```
+
+### 4. 長いフィールドへの対応
 
 CSV の上位行に短いデータしかない場合、FireDAC の自動判定によりフィールドサイズが小さくなり、後続行の長い値が切り捨てられることがあります。
 本コンポーネントはコンストラクタの `MaxFieldLength` 引数(既定 `1024`)、または `MaxLength` プロパティで明示的にフィールドサイズを拡張できます。
@@ -132,6 +152,7 @@ Analyzer.MaxLength := 8192;
 ### ヘッダモード / HeaderMode
 
 | メンバー | 説明 |
+|---|---|
 |`fhmFollow` | CSVに従う（1行目がヘッダ） |
 |`fhmWithOut` | ヘッダを手動設定する |
 |`fhmWithDuplicate` | 重複ヘッダをリネームする |
