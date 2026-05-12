@@ -174,7 +174,7 @@ Analyzer.MaxLength := 8192;
 
 | 説明 | 詳細 |
 |---|---|
-|重複ヘッダ用に設定できるPrefixを追加|`someDuplicateHeader` `someDuplicateHeader1` -> `__someDuplicateHeader1`|
+|重複ヘッダ用に設定できるPrefixを追加|`dupHeader` `dupHeader` -> `dupHeader` `dupHeader__1`|
 |外部コンポーネント連携用にDataSetを永続化|直接外に出ていたDataSetをDataSourceでラップして参照に変更|
 |重複ヘッダモードの場合の利便性の為コンストラクタを変更|MaxFieldCountを指定できるよう変更 規定値256、大きなサイズが必要な場合はCreate時に指定|
 |WithFieldNamesを破壊的変更| boolean -> Enum(fhmFollow,fhmManual,fhmWithDuplicate)|
