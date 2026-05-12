@@ -247,20 +247,27 @@ begin
 
       if (ADataSet.Fields[i].AsWideString <> '') or (FTruncateField = false) then begin
 
-        if HeaderCount.TryGetValue(ADataSet.Fields[i].AsWideString,cnt) then begin
-          //重複している場合は末尾にFDuplicatePrefixとカウントをセット
-          HeaderCount[ADataSet.Fields[i].AsWideString] := cnt + 1;
-          Headers.Add(ADataSet.Fields[i].AsWideString + FDuplicatePrefix + HeaderCount[ADataSet.Fields[i].AsWideString].ToString);
+        if (ADataSet.Fields[i].AsWideString = '') and (FTruncateField = false) then begin
+          //空欄かつTruncateFieldがFalse（切り捨てない）場合、仮フィールド名をそのまま割り当てる
+          if HeaderCount.TryGetValue(ADataSet.Fields[i].FieldName,cnt) then begin
+            HeaderCount[ADataSet.Fields[i].FieldName] := cnt + 1;
+            Headers.Add(ADataSet.Fields[i].FieldName + FDuplicatePrefix + HeaderCount[ADataSet.Fields[i].FieldName].ToString);
+          end else begin
+            HeaderCount.Add(ADataSet.Fields[i].FieldName,0);
+            Headers.Add(ADataSet.Fields[i].FieldName);
+          end;
         end else begin
-          HeaderCount.Add(ADataSet.Fields[i].AsWideString,0);
-          Headers.Add(ADataSet.Fields[i].AsWideString);
+
+          if HeaderCount.TryGetValue(ADataSet.Fields[i].AsWideString,cnt) then begin
+            //重複している場合は末尾にFDuplicatePrefixとカウントをセット
+            HeaderCount[ADataSet.Fields[i].AsWideString] := cnt + 1;
+            Headers.Add(ADataSet.Fields[i].AsWideString + FDuplicatePrefix + HeaderCount[ADataSet.Fields[i].AsWideString].ToString);
+          end else begin
+            HeaderCount.Add(ADataSet.Fields[i].AsWideString,0);
+            Headers.Add(ADataSet.Fields[i].AsWideString);
+          end;
         end;
 
-      end else if (ADataSet.Fields[i].AsWideString = '') and (FTruncateField = false) then begin
-        //空欄かつTruncateFieldがFalse（切り捨てない）場合、仮フィールド名をそのまま割り当てる
-        Headers.Add(ADataSet.Fields[i].FieldName);
-        //仮フィールド名がCSVのヘッダと重複している可能性を考慮して HeaderCount に追加しておく
-        HeaderCount.Add(ADataSet.Fields[i].FieldName,0);
       end else begin
         break;
       end;
