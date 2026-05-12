@@ -179,6 +179,16 @@ Analyzer.MaxLength := 8192;
 |重複ヘッダモードの場合の利便性の為コンストラクタを変更|MaxFieldCountを指定できるよう変更 規定値256、大きなサイズが必要な場合はCreate時に指定|
 |WithFieldNamesを破壊的変更| boolean -> Enum(fhmFollow,fhmManual,fhmWithDuplicate)|
 
+### 参考ベンチマーク
+
+4.2Ghz 8core Processor (VM)
+
+| 説明 | 詳細 |
+|---|---|
+|KEN_ALL_ROME.CSV 11MB| 702ms / 50MB Memory |
+|GeneratedCSVSample 1GB (6,000,000Rows / 1 billion words) | 59,786ms / 4.8GB Memory |
+
+約4～5倍程度のメモリ消費なので要件に合わせて必要であればCSV側をChunk化してください
 
 ---
 
