@@ -256,6 +256,11 @@ begin
           Headers.Add(ADataSet.Fields[i].AsWideString);
         end;
 
+      end else if (ADataSet.Fields[i].AsWideString = '') and (FTruncateField = false) then begin
+        //空欄かつTruncateFieldがFalse（切り捨てない）場合、仮フィールド名をそのまま割り当てる
+        Headers.Add(ADataSet.Fields[i].FieldName);
+        //仮フィールド名がCSVのヘッダと重複している可能性を考慮して HeaderCount に追加しておく
+        HeaderCount.Add(ADataSet.Fields[i].FieldName,0);
       end else begin
         break;
       end;

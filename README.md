@@ -186,6 +186,7 @@ Analyzer.MaxLength := 8192;
 
 | 説明 | 詳細 |
 |---|---|
+|重複ヘッダモードでヘッダに空欄を含むCSVを読み込んだ場合を考慮|TruncateFieldがFalseでヘッダが空欄の場合仮フィールド名をそのまま採用|
 |重複ヘッダ用に設定できるPrefixを追加|`dupHeader` `dupHeader` -> `dupHeader` `dupHeader__1`|
 |外部コンポーネント連携用にDataSetを永続化|直接外に出ていたDataSetをDataSourceでラップして参照に変更|
 |重複ヘッダモードの場合の利便性の為コンストラクタを変更|MaxFieldCountを指定できるよう変更 規定値256、大きなサイズが必要な場合はCreate時に指定|
