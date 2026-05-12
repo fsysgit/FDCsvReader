@@ -3,11 +3,23 @@
 FireDAC の `TFDBatchMove` を利用した、軽量な CSV 解析コンポーネント (Delphi)。
 VCL / FMX に依存しないため、コンソールアプリやサービス、ライブラリ内部からも利用できます。
 重複したヘッダを持つCSVにも対応。
+- RFC4180 準拠（FireDAC CSVパーサによる準拠）
+  - ダブルクォート囲みフィールド
+  - フィールド内カンマ
+  - エスケープされたダブルクォート (`""`)
+  - 複数行フィールド
+
 >※日本語CSVの場合Shift-JIS（SJIS、CP932等）はFireDACの内部実装的に非対応です。
 >事前にUTF8（BOM付き）に変換してご利用ください。
 
 A lightweight CSV reader component for Delphi, built on top of FireDAC's `TFDBatchMove`.
-No VCL / FMX dependency — usable from console apps, services, and libraries. it also supports CSV files with duplicate headers.
+No VCL / FMX dependency — usable from console apps, services, and libraries. It also supports CSV files with duplicate headers.
+- RFC 4180 compliant CSV parsing(via FireDAC)
+  - Quoted fields
+  - Embedded commas
+  - Escaped double quotes (`""`)
+  - Multi-line fields
+
 > Note: Due to FireDAC's internal text parser behavior, legacy Japanese
 > encodings such as Shift-JIS / CP932 are **not reliably supported**.
 > Please convert your CSV files to UTF-8 (BOM recommended) before loading.
