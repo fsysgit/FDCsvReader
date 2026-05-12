@@ -14,19 +14,18 @@ type
   /// </summary>
 
   //follow : CSVの1行目をヘッダとして読み込みます。重複したヘッダがあると読み込み時エラーになります。
-  //withOut : ヘッダを考慮せず連番ヘッダを割り当てます。（1行目がヘッダの場合ヘッダもデータとして扱われます）
+  //Manual : ヘッダを考慮せず連番ヘッダを割り当てます。（1行目がヘッダの場合ヘッダもデータとして扱われます）
   //withDuplicate : CSVの1行目をヘッダとして重複したヘッダを連番ヘッダに置き換えて読み込みます。エラーは出ませんがCSVとは違うヘッダが設定されます。
   TfsHeaderMode = (fhmFollow,fhmManual,fhmWithDuplicate);
 
   TFDCSVAnalyzer = class(TComponent)
-
   public
-
     constructor Create(AOwner: TComponent;MaxFieldLength : integer = 1024;MaxFieldCount : integer = 256); overload;
     destructor Destroy; override;
   private
     FCursor : TFDGUIxWaitCursor;
     FDataSet: TFDMemTable;
+    FDataSource : TDataSource;
     FSeparator: Char;
     FWithFieldNames: TfsHeaderMode;
     FEncoding : TFDEncoding;
@@ -35,7 +34,9 @@ type
     FDelimiter : Char;
     FMaxFieldCount : integer;
     FTruncateField : boolean;
+    FDuplicatePrefix : string;
     procedure SetFieldNameAndTruncFields(var ADataSet : TFDMemTable);
+    function GetDataSet : TFDMemTable;
   public
     /// <summary>指定した CSV ファイルを読み込み、DataSet に格納する</summary>
     procedure LoadCSV(AFileName: TFileName);
@@ -43,8 +44,8 @@ type
     /// <summary>DataSet の内容をクリアする</summary>
     procedure Clear;
 
-    /// <summary>読み込んだデータを保持する TFDMemTable</summary>
-    property DataSet: TFDMemTable read FDataSet;
+    /// <summary>読み込んだデータを保持する TFDMemTable/DataSourceで抽象化</summary>
+    property DataSet: TFDMemTable read getDataSet;
 
     property Fields : TStringList read FFields;
 
@@ -56,7 +57,10 @@ type
 
     //<summary>仮フィールドの切り捨てを行うかどうか</summary>
     property TruncateField : boolean read FTruncateField write FTruncateField default true;
-    
+
+    //<summary>フィールド名重複時のプレフィックス</summary>
+    property DuplicatePrefix : string read FDuplicatePrefix write FDuplicatePrefix;
+
     /// <summary>改行区切りでフィールド名を設定 または Fieldsに直接delimitedText等で設定する</summary>
     procedure SetFields(AFields : string);
 
@@ -83,6 +87,7 @@ begin
   inherited Create(AOwner);
   FSeparator := ',';
   FDelimiter := '"';
+  FDataSource := TDataSource.Create(self);
   FCursor := TFDGUIxWaitCursor.Create(self);
   FCursor.Provider := 'Console';
   FWithFieldNames := fhmFollow;
@@ -92,6 +97,8 @@ begin
   FMaxLength := MaxFieldLength;
   FTruncateField := true;
   FMaxFieldCount := MaxFieldCount;
+  FDuplicatePrefix := '';
+  FDataSource.DataSet := FDataSet;
 end;
 
 
@@ -103,6 +110,11 @@ begin
 end;
 
 
+
+function TFDCSVAnalyzer.GetDataSet: TFDMemTable;
+begin
+  result := TFDMemTable(FDataSource.DataSet);
+end;
 
 procedure TFDCSVAnalyzer.LoadCSV(AFileName: TFileName);
 var
@@ -233,14 +245,14 @@ begin
       if (ADataSet.Fields[i].AsWideString <> '') or (FTruncateField = false) then begin
 
         if HeaderCount.TryGetValue(ADataSet.Fields[i].AsWideString,cnt) then begin
-          //重複している場合は末尾にカウントをセット
+          //重複している場合は末尾にFDuplicatePrefixとカウントをセット
           HeaderCount[ADataSet.Fields[i].AsWideString] := cnt + 1;
-          Headers.Add(ADataSet.Fields[i].AsWideString + HeaderCount[ADataSet.Fields[i].AsWideString].ToString);
+          Headers.Add(ADataSet.Fields[i].AsWideString + FDuplicatePrefix + HeaderCount[ADataSet.Fields[i].AsWideString].ToString);
         end else begin
           HeaderCount.Add(ADataSet.Fields[i].AsWideString,0);
           Headers.Add(ADataSet.Fields[i].AsWideString);
         end;
-        
+
       end else begin
         break;
       end;
@@ -293,12 +305,12 @@ end;
 
 procedure TFDCSVAnalyzer.Clear;
 begin
-
+  FDataSource.DataSet := nil;
   if Assigned(FDataSet) then begin
     FreeAndNil(FDataSet);
     FDataSet := TFDMemTable.Create(self);
   end;
-
+  FDataSource.DataSet := FDataSet;
 end;
 
 end.

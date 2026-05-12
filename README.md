@@ -60,7 +60,7 @@ begin
     Analyzer.Separator      := ',';         //区切り文字
     Analyzer.Delimiter      := '"';         //囲い文字
     Analyzer.WithFieldNames := fhmFollow;        // CSVに従う（1 行目をフィールド名として扱う）
-    Analyzer.Encoding       := ecUTF8;      // 必要に応じて指定 (既定: ecDefault = 自動認識)
+    Analyzer.Encoding       := ecUTF8;      // 必要に応じて指定 (既定: ecDefault = OSデフォルトコードページ)
 
     Analyzer.LoadCSV('C:\data\sample.csv');
 
@@ -106,10 +106,11 @@ var
 begin
   Analyzer := TFDCSVAnalyzer.Create(nil,1024,512); //第三引数は仮フィールドの数
   try
-    Analyzer.Separator      := ',';         //区切り文字
-    Analyzer.Delimiter      := '"';         //囲い文字
-    Analyzer.WithFieldNames := fhmWithDuplicate;  // 1 行目をフィールド名として扱い、重複を自動リネームする
-    Analyzer.Encoding       := ecUTF8;      // 必要に応じて指定 (既定: ecDefault = 自動認識)
+    Analyzer.Separator       := ',';         //区切り文字
+    Analyzer.Delimiter       := '"';         //囲い文字
+    Analyzer.WithFieldNames  := fhmWithDuplicate;  // 1 行目をフィールド名として扱い、重複を自動リネームする
+    Analyzer.DuplicatePrefix := '__';        //重複時、連番の前に追加するプレフィックス（必要な場合）
+    Analyzer.Encoding        := ecUTF8;      //必要に応じて指定 (既定: ecDefault = OSデフォルトコードページ)
 
     Analyzer.LoadCSV('C:\data\sample.csv');
   finally
@@ -149,6 +150,7 @@ Analyzer.MaxLength := 8192;
 | `Separator` | `Char` (published) | 区切り文字 (既定 `,`) |
 | `Delimiter` | `Char` (published) | 囲い文字 (既定 `"`) |
 | `WithFieldNames` | `Enum` (published) | 1 行目をヘッダーとして扱う/重複をリネームする/ヘッダを手動で設定する (既定 `ヘッダーとして扱う`) |
+| `DuplicatePrefix` | `string` | 重複時に連番の前に設定するプレフィックス |
 | `Encoding` | `TFDEncoding` (published) | エンコーディング (既定 `ecDefault` = OSデフォルトコードページ) |
 
 ### ヘッダモード / HeaderMode
@@ -156,7 +158,7 @@ Analyzer.MaxLength := 8192;
 | メンバー | 説明 |
 |---|---|
 |`fhmFollow` | CSVに従う（1行目がヘッダ） |
-|`fhmWithOut` | ヘッダを手動設定する |
+|`fhmManual` | ヘッダを手動設定する |
 |`fhmWithDuplicate` | 重複ヘッダをリネームする |
 
 
@@ -171,6 +173,8 @@ Analyzer.MaxLength := 8192;
 
 | 説明 | 詳細 |
 |---|---|
+|重複ヘッダ用に設定できるPrefixを追加|`someDuplicateHeader` `someDuplicateHeader1` -> `__someDuplicateHeader1`|
+|外部コンポーネント連携用にDataSetを永続化|直接外に出ていたDataSetをDataSourceでラップして参照に変更|
 |重複ヘッダモードの場合の利便性の為コンストラクタを変更|MaxFieldCountを指定できるよう変更 規定値256、大きなサイズが必要な場合はCreate時に指定|
 |WithFieldNamesを破壊的変更| boolean -> Enum(fhmFollow,fhmManual,fhmWithDuplicate)|
 
