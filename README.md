@@ -8,7 +8,12 @@ VCL / FMX に依存しないため、コンソールアプリやサービス、�
   - フィールド内カンマ
   - エスケープされたダブルクォート (`""`)
   - 複数行フィールド
-
+その他の特徴
+  - 重複ヘッダ対応
+  - ヘッダ自動リマップ
+  - 区切り文字変更可能
+  - コンソール / サービス利用対応
+  - TFDMemTable ベース(DataSet/DataSourceとして利用可能)
 >※日本語CSVの場合Shift-JIS（SJIS、CP932等）はFireDACの内部実装的に非対応です。
 >事前にUTF8（BOM付き）に変換してご利用ください。
 
@@ -19,7 +24,12 @@ No VCL / FMX dependency — usable from console apps, services, and libraries. I
   - Embedded commas
   - Escaped double quotes (`""`)
   - Multi-line fields
-
+Other Features
+  - Duplicate header support
+  - Header remapping mode
+  - Configurable separator / delimiter
+  - Console / service friendly
+  - TFDMemTable based(DataSet/DataSource)
 > Note: Due to FireDAC's internal text parser behavior, legacy Japanese
 > encodings such as Shift-JIS / CP932 are **not reliably supported**.
 > Please convert your CSV files to UTF-8 (BOM recommended) before loading.
@@ -35,7 +45,7 @@ No VCL / FMX dependency — usable from console apps, services, and libraries. I
 - **最大フィールド長(`MaxLength`)を拡張** — 上位行に短いデータしかない場合に発生する文字の切り捨てを防止
 - **重複したヘッダを持つCSVにも対応**
 - 単一ユニット (`FS.FireDAC.CSVReader.pas`) で完結
-
+- FireDACによるRFC4180準拠
 ---
 
 ## 動作環境 / Requirements
