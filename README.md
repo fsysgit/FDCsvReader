@@ -143,6 +143,7 @@ Analyzer.MaxLength := 8192;
 | `Clear` | method | `DataSet` の内容をクリア |
 | `SetFields(AFields)` | method | 改行区切り文字列でフィールド名を一括設定 |
 | `DataSet` | `TFDMemTable` (read) | 読み込み結果を保持するメモリテーブル |
+| `DataSource` | `TDataSource` (read) | 内部のDataSet（TFDMemTable）への参照を持ったDataSource |
 | `Fields` | `TStringList` (read) | 手動指定用フィールド名リスト |
 | `MaxFieldCount` | `Integer` (property) | 重複ヘッダの場合、テンポラリとして一旦保存するカラム数 (既定 `256`) |
 | `TruncateField` | `boolean` (property) | 仮フィールドの切り捨てを行うかどうか (既定 `true`) |

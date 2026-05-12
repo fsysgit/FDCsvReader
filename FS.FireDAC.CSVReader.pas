@@ -47,6 +47,9 @@ type
     /// <summary>読み込んだデータを保持する TFDMemTable/DataSourceで抽象化</summary>
     property DataSet: TFDMemTable read getDataSet;
 
+    /// <summary>データソースを他のコンポーネントから利用したい場合に使用</summary>
+    property DataSource : TDataSource read FDataSource;
+
     property Fields : TStringList read FFields;
 
     property MaxLength : integer read FMaxLength write FMaxLength;
