@@ -166,6 +166,7 @@ Analyzer.MaxLength := 8192;
 | `SetFields(AFields)` | method | 改行区切り文字列でフィールド名を一括設定 |
 | `DataSet` | `TFDMemTable` (read) | 読み込み結果を保持するメモリテーブル |
 | `DataSource` | `TDataSource` (read) | 内部のDataSet（TFDMemTable）への参照を持ったDataSource |
+| `TrimSpace` | `boolean` (property) | 前後に含まれる半角スペースをTrimするかどうか（既定 `true`）※RFC4180規定はFalse |
 | `Fields` | `TStringList` (read) | 手動指定用フィールド名リスト |
 | `MaxFieldCount` | `Integer` (property) | 重複ヘッダの場合、テンポラリとして一旦保存するカラム数 (既定 `256`) |
 | `TruncateField` | `boolean` (property) | 仮フィールドの切り捨てを行うかどうか (既定 `true`) |
@@ -257,7 +258,7 @@ It loads CSVs covering RFC 4180 edge cases, encoding variants, and line-ending v
 | 010 | `line_endings_crlf.csv` | CRLF 改行 (Windows) |
 | 011 | `line_endings_cr.csv` | CR 改行 (Classic Mac) |
 | 012 | `tab_delimited.tsv` | タブ区切り |
-| 013 | `trim_spaces.csv` | 前後スペース / 囲い文字内スペース |
+| 013 | `trim_spaces.csv` | 前後スペース / 囲い文字内スペース ※RFC4180準拠の場合、TrimSpaceをFalseに設定してください |
 | 014 | `unclosed_quote.csv` | 不正な CSV (囲い文字未閉じ) — 例外発生を確認 |
 | 015 | `large_1mb.csv` | 1MB ファイルでのパフォーマンス検証 (※リポジトリ非同梱) |
 | 016 | `large_100mb.csv` | 100MB ファイルでのパフォーマンス検証 (※リポジトリ非同梱) |

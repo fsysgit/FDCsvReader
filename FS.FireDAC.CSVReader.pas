@@ -35,6 +35,7 @@ type
     FMaxFieldCount : integer;
     FTruncateField : boolean;
     FDuplicatePrefix : string;
+    FTrimSpace : boolean;
     procedure SetFieldNameAndTruncFields(var ADataSet : TFDMemTable);
     function GetDataSet : TFDMemTable;
   public
@@ -49,6 +50,9 @@ type
 
     /// <summary>データソースを他のコンポーネントから利用したい場合に使用</summary>
     property DataSource : TDataSource read FDataSource;
+
+    /// <summary>前後の半角スペースをTrimするかどうか デフォルト値 True</summary>
+    property TrimSpace : Boolean read FTrimSpace write FTrimSpace;
 
     property Fields : TStringList read FFields;
 
@@ -102,6 +106,7 @@ begin
   FMaxFieldCount := MaxFieldCount;
   FDuplicatePrefix := '';
   FDataSource.DataSet := FDataSet;
+  FTrimSpace := True;
 end;
 
 
@@ -144,11 +149,13 @@ begin
     // --- Reader（CSV テキストファイル） ---
     LReader := TFDBatchMoveTextReader.Create(LBatchMove);
 
-    LReader.FileName := AFileName;
-    LReader.DataDef.Separator := FSeparator;
+    LReader.FileName               := AFileName;
+    LReader.DataDef.Separator      := FSeparator;
     LReader.DataDef.WithFieldNames := FWithFieldNames in [fhmFollow];
     LReader.DataDef.Delimiter      := FDelimiter;
-    //基本は文字コード自動認識、必要な場合は事前にFEncodingにセットしておく
+
+
+    //基本はOSデフォルト(ecDefault)、必要な場合は事前にFEncodingにセットしておく
     LReader.Encoding := FEncoding;
 
     // --- Writer（TFDMemTable） ---
@@ -212,6 +219,11 @@ begin
       FDataSet.CreateDataSet;
     end;
 
+    //GuessFormatの影響を避けるため実行直前に設定
+    FDataSet.FormatOptions.StrsTrim          := FTrimSpace;
+    LReader.DataDef.TrimLeft                 := FTrimSpace;
+    LReader.DataDef.TrimRight                := FTrimSpace;
+    tempDataSet.FormatOptions.StrsTrim       := FTrimSpace;
     try
       LBatchMove.Execute;
     except
@@ -227,7 +239,6 @@ end;
 
 procedure TFDCSVAnalyzer.SetFieldNameAndTruncFields(var ADataSet : TFDMemTable);
 var
-  s : string;
   i,cnt : integer;
   Headers : TStringList;
   HeaderCount : TDictionary<string,integer>;
@@ -287,7 +298,7 @@ begin
       
       LWriter.DataSet := FDataSet;
       LWriter.Optimise := false;
-      
+      ADataSet.FormatOptions.StrsTrim := TrimSpace;
       for i := 0 to Headers.Count - 1 do begin
         FDataSet.FieldDefs.Add(Headers[i],TFieldType.ftWideString,FMaxLength);
 
