@@ -223,7 +223,8 @@ begin
     FDataSet.FormatOptions.StrsTrim          := FTrimSpace;
     LReader.DataDef.TrimLeft                 := FTrimSpace;
     LReader.DataDef.TrimRight                := FTrimSpace;
-    tempDataSet.FormatOptions.StrsTrim       := FTrimSpace;
+    if assigned(tempDataSet) then
+      tempDataSet.FormatOptions.StrsTrim     := FTrimSpace;
     try
       LBatchMove.Execute;
     except
