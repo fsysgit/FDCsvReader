@@ -215,6 +215,64 @@ Analyzer.MaxLength := 8192;
 
 ---
 
+## テスト / Tests
+
+リポジトリには手動テスト用の **FMX GUI テストアプリ** (`CSVTest.dpr`) を同梱しています。
+RFC 4180 のエッジケース、各種文字コード、改行コードのバリエーションを含む CSV をワンクリックで読み込ませ、ヘッダー認識・行数・所要時間を確認できます。
+
+A manual **FMX GUI test harness** (`CSVTest.dpr`) is included.
+It loads CSVs covering RFC 4180 edge cases, encoding variants, and line-ending variants, reporting recognized headers, row count, and elapsed time with a single click.
+
+### 操作方法 / How to use
+
+| 項目 | 説明 |
+|---|---|
+| **事前準備 / Setup**| CSVTest.dprと同じフォルダにFS.FireDAC.CSVReader.pasを配置するかIDEからプロジェクトに追加してください |
+| **TargetCSV** | `./` ルートフォルダから検証対象 CSV を選択（コンパイルした実行ファイルをCSVと同じフォルダに入れて実行してください） |
+| **HeaderMode** | `fhmFollow` / `fhmManual` / `fhmWithDuplicate` を切替 |
+| **Headers (for fhmManual)** | `fhmManual` 選択時のヘッダ名を改行区切りで入力 |
+| **Separator** | `comma` / `tab` |
+| **Encoding** | `ecANSI` / `ecUTF8` / `ecUTF16` / `ecDefault` |
+| **truncateFields** | 空欄ヘッダの切り捨て ON/OFF (`fhmWithDuplicate` 時) |
+| **ExportRowData** | データ本体をメモに全行ダンプ (ラージファイル時は OFF 推奨) |
+| **Analyze!** | 解析実行 — メモにファイル名・ヘッダ・行数・経過時間 (ms) を追記 |
+
+1. `CSVTest.dpr` を Delphi で開いてビルド・実行（CSVファイルと違うフォルダに実行ファイルが生成された場合はCSVのあるフォルダに実行ファイルを移動してください。）
+2. 上記設定を行い **Analyze!** ボタンで実行
+3. メモ欄に結果が追記される (連続実行で結果が蓄積)
+
+### テストケース / Test cases
+
+| # | ファイル | 検証内容 / What it verifies |
+|---|---|---|
+| 001 | `basic.csv` | 基本動作 (3列×2行 / ASCII / LF) |
+| 002 | `quoted_comma.csv` | RFC 4180: 囲い文字内のカンマ |
+| 003 | `quoted_newline.csv` | RFC 4180: 囲い文字内の改行 |
+| 004 | `escaped_quote.csv` | RFC 4180: エスケープされたダブルクォート (`""`) |
+| 005 | `missing_extra_columns.csv` | 列数不揃いの行 (3列→2列→4列) |
+| 006 | `duplicate_empty_headers.csv` | 重複かつ空欄を含むヘッダ (`id,,id`) — `fhmWithDuplicate` モードの主用途 |
+| 007 | `utf8_bom.csv` | UTF-8 BOM 付き + 日本語 |
+| 008 | `shift_jis.csv` | Shift-JIS (※非サポート確認用 / **読み込み不可が期待動作、ecANSIで読み込める可能性もあります**) |
+| 009 | `line_endings_lf.csv` | LF 改行 (Unix) |
+| 010 | `line_endings_crlf.csv` | CRLF 改行 (Windows) |
+| 011 | `line_endings_cr.csv` | CR 改行 (Classic Mac) |
+| 012 | `tab_delimited.tsv` | タブ区切り |
+| 013 | `trim_spaces.csv` | 前後スペース / 囲い文字内スペース |
+| 014 | `unclosed_quote.csv` | 不正な CSV (囲い文字未閉じ) — 例外発生を確認 |
+| 015 | `large_1mb.csv` | 1MB ファイルでのパフォーマンス検証 (※リポジトリ非同梱) |
+| 016 | `large_100mb.csv` | 100MB ファイルでのパフォーマンス検証 (※リポジトリ非同梱) |
+| 017 | `firedac_integration_UTF8.csv` / `*_UTF8N.csv` | 実用シナリオ: ASCII + 日本語 + 複数行クォート、**BOM 有り / 無し** をそれぞれ分離して検証 |
+
+### ラージファイルの注意 / Notes on large files
+
+- 015 / 016 はリポジトリサイズを抑えるため**同梱していません**。パフォーマンス検証が必要な場合は別途生成してください。
+- 同梱していない CSV を選択すると、`LoadCSV` 内の `FileExists` チェックにより `EFileNotFoundException` で停止します。
+- ラージファイル + `ExportRowData` の組み合わせはメモへの大量書き込みで応答性が落ちるため、テストアプリ側でガードしています。
+
+015 / 016 are **not included** in the repository to keep its size small. Generate them locally if you need performance benchmarks. Selecting a missing file raises `EFileNotFoundException` inside `LoadCSV`. The harness also blocks the `ExportRowData` + large-file combination to avoid memo flooding.
+
+---
+
 ## ライセンス / License
 
 [MIT License](LICENSE) — Copyright (c) 2026 (fsystem)
