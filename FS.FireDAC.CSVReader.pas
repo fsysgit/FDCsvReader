@@ -4,8 +4,8 @@ interface
 
 uses
   System.SysUtils,System.Classes,FireDAC.Stan.Intf,Generics.Collections,
-  Data.DB, FireDAC.Comp.Client,FireDAC.ConsoleUI.Wait,FireDAC.Comp.UI,
-  FireDAC.Comp.BatchMove.Text,FireDAC.Comp.BatchMove.Dataset,FireDAC.Comp.BatchMove;
+  Data.DB, FireDAC.Comp.Client,FireDAC.ConsoleUI.Wait,FireDAC.Comp.UI,System.Threading,
+  FireDAC.Comp.BatchMove.Text,FireDAC.Comp.BatchMove.Dataset,FireDAC.Comp.BatchMove,System.SyncObjs;
 
 type
   /// <summary>
@@ -17,6 +17,8 @@ type
   //Manual : ヘッダを考慮せず連番ヘッダを割り当てます。（1行目がヘッダの場合ヘッダもデータとして扱われます）
   //withDuplicate : CSVの1行目をヘッダとして重複したヘッダを連番ヘッダに置き換えて読み込みます。エラーは出ませんがCSVとは違うヘッダが設定されます。
   TfsHeaderMode = (fhmFollow,fhmManual,fhmWithDuplicate);
+
+  TFDCSVAnalyzerException = procedure(ASender: TObject; AException: Exception) of object;
 
   TFDCSVAnalyzer = class(TComponent)
   public
@@ -36,8 +38,37 @@ type
     FTruncateField : boolean;
     FDuplicatePrefix : string;
     FTrimSpace : boolean;
+
+    FAsync : boolean;
+
+    FOnComplete : TNotifyEvent;
+    FOnException : TFDCSVAnalyzerException;
+    FOnProgress : TNotifyEvent;
+
+    FReadCount : integer;
+    FWriteCount : integer;
+
+    FPhase : TFDBatchMovePhase;
+    FDoneEvent: TEvent;
+
+    FDestroying: Boolean;
+
+    FRunningBatchMove: TFDBatchMove;
+
     procedure SetFieldNameAndTruncFields(var ADataSet : TFDMemTable);
     function GetDataSet : TFDMemTable;
+
+    procedure BatchMoveProgress(ASender: TObject; APhase: TFDBatchMovePhase);
+    procedure LoadCSVSync(AFileName: TFileName);
+    procedure LoadCSVAsync(AFileName : TFileName);
+
+    procedure ConfigureBatchMove(ABatchMove: TFDBatchMove; const AFileName: TFileName;
+              out AReader: TFDBatchMoveTextReader; out AWriter: TFDBatchMoveDataSetWriter;
+              out ATempDataSet: TFDMemTable);
+  protected
+    procedure DoComplete;
+    procedure DoException(ASender: TObject; AException: Exception);
+    procedure DoProgress(ASender : TObject);
   public
     /// <summary>指定した CSV ファイルを読み込み、DataSet に格納する</summary>
     procedure LoadCSV(AFileName: TFileName);
@@ -62,14 +93,28 @@ type
     ///デフォルト値はBiff8の最大数とする
     property MaxFieldCount : integer read FMaxFieldCount write FMaxFieldCount default 256;
 
-    //<summary>仮フィールドの切り捨てを行うかどうか</summary>
+    ///<summary>仮フィールドの切り捨てを行うかどうか</summary>
     property TruncateField : boolean read FTruncateField write FTruncateField default true;
 
-    //<summary>フィールド名重複時のプレフィックス</summary>
+    ///<summary>フィールド名重複時のプレフィックス</summary>
     property DuplicatePrefix : string read FDuplicatePrefix write FDuplicatePrefix;
+
+    ///<summary>非同期実行スイッチ</summary>
+    property Async : boolean read FAsync write FAsync;
 
     /// <summary>改行区切りでフィールド名を設定 または Fieldsに直接delimitedText等で設定する</summary>
     procedure SetFields(AFields : string);
+
+    property OnComplete : TNotifyEvent read FOnComplete write FOnComplete;
+    property OnException : TFDCSVAnalyzerException read FOnException write FOnException;
+    property OnProgress : TNotifyEvent read FOnProgress write FOnProgress;
+
+    ///<summary>BatchMove関係のプロパティ</summary>
+    property ReadCount : integer read FReadCount;
+    property WriteCount : integer read FWriteCount;
+    property Phase : TFDBatchMovePhase read FPhase;
+
+
 
   published
     /// <summary>フィールド区切り文字（デフォルト: ','）</summary>
@@ -107,16 +152,58 @@ begin
   FDuplicatePrefix := '';
   FDataSource.DataSet := FDataSet;
   FTrimSpace := True;
+  FAsync := false;
+  FOnComplete := nil;
+  FOnException := nil;
+  FOnProgress := nil;
+  FDestroying := false;
+  FDoneEvent := TEvent.Create(nil,True,True,'');
 end;
 
+procedure TFDCSVAnalyzer.DoComplete;
+begin
+  if Assigned(FOnComplete) and
+   ((Owner = nil) or not (csLoading in Owner.ComponentState)) then
+     FOnComplete(Self);
+end;
+
+
+procedure TFDCSVAnalyzer.DoException(ASender: TObject; AException: Exception);
+begin
+  if Assigned(FOnException) and
+   ((Owner = nil) or not (csLoading in Owner.ComponentState)) then
+     FOnException(ASender,AException);
+end;
+
+procedure TFDCSVAnalyzer.DoProgress(ASender : TObject);
+begin
+  if Assigned(FOnProgress) and
+   ((Owner = nil) or not (csLoading in Owner.ComponentState)) then
+  FOnProgress(Self);
+end;
 
 destructor TFDCSVAnalyzer.Destroy;
 begin
+  FDestroying := True;
+  if Assigned(FRunningBatchMove) then begin
+    try
+      FRunningBatchMove.OnProgress := nil;   // ★ 先に Progress 経路を切る
+      FRunningBatchMove.AbortJob;
+    except
+    end;
+  end;
 
+  while FDoneEvent.WaitFor(50) <> wrSignaled do
+    try
+      CheckSynchronize;
+    except
+      // 破棄中のラムダ例外はここで吸う（フォーム連鎖破棄に巻き込まれた AV 対策）
+    end;
+
+  FDoneEvent.Free;
   FFields.Free;
   inherited Destroy;
 end;
-
 
 
 function TFDCSVAnalyzer.GetDataSet: TFDMemTable;
@@ -125,125 +212,244 @@ begin
 end;
 
 procedure TFDCSVAnalyzer.LoadCSV(AFileName: TFileName);
-var
-  LBatchMove: TFDBatchMove;
-  LReader: TFDBatchMoveTextReader;
-  LWriter: TFDBatchMoveDataSetWriter;
-  tempDataSet : TFDMemTable;
-  i : integer;
 begin
-  tempDataSet := nil;
-
+  // 二重起動防止：前回の非同期がまだ走っているなら弾く
+  if FDoneEvent.WaitFor(0) <> wrSignaled then
+    raise Exception.Create('前回の非同期処理がまだ完了していません。');
   if not FileExists(AFileName) then
     raise EFileNotFoundException.CreateFmt('CSV file not found: %s', [AFileName]);
 
   if (FWithFieldNames = fhmManual) and (FFields.Count = 0) then
     raise Exception.Create('フィールド自動認識がオフの場合はフィールド名をセットしてください。');
 
-  // 既存データをクリア
   Clear;
 
-  LBatchMove := TFDBatchMove.Create(nil);
-  try
-
-    // --- Reader（CSV テキストファイル） ---
-    LReader := TFDBatchMoveTextReader.Create(LBatchMove);
-
-    LReader.FileName               := AFileName;
-    LReader.DataDef.Separator      := FSeparator;
-    LReader.DataDef.WithFieldNames := FWithFieldNames in [fhmFollow];
-    LReader.DataDef.Delimiter      := FDelimiter;
+  if FAsync then begin
+    LoadCSVAsync(AFileName);
+  end else begin
+    LoadCSVSync(AFileName);
+  end;
+end;
 
 
-    //基本はOSデフォルト(ecDefault)、必要な場合は事前にFEncodingにセットしておく
-    LReader.Encoding := FEncoding;
+procedure TFDCSVAnalyzer.ConfigureBatchMove(
+  ABatchMove: TFDBatchMove; const AFileName: TFileName;
+  out AReader: TFDBatchMoveTextReader; out AWriter: TFDBatchMoveDataSetWriter;
+  out ATempDataSet: TFDMemTable);
+var
+  i: Integer;
+begin
+  ATempDataSet := nil;
 
-    // --- Writer（TFDMemTable） ---
-    LWriter := TFDBatchMoveDataSetWriter.Create(LBatchMove);
-    LWriter.Optimise := false;
-    LWriter.DataSet := FDataSet;
+  AReader := TFDBatchMoveTextReader.Create(ABatchMove);
+  AReader.FileName               := AFileName;
+  AReader.DataDef.Separator      := FSeparator;
+  AReader.DataDef.WithFieldNames := FWithFieldNames in [fhmFollow];
+  AReader.DataDef.Delimiter      := FDelimiter;
+  AReader.Encoding               := FEncoding;
 
-    // CSV 構造を解析してデータを転送
-    if FWithFieldNames = fhmFollow then begin
-      
-      LBatchMove.GuessFormat;
-      //上位に短いデータしかない場合文字の切り捨てが発生するのでフィールドサイズを拡張
-      for i := 0 to LReader.DataDef.Fields.Count - 1 do begin
-        LReader.DataDef.Fields[i].DataType := TFDtextDataType.atString;
-        LReader.DataDef.Fields[i].FieldSize := FMaxLength;
-      end;
+  AWriter := TFDBatchMoveDataSetWriter.Create(ABatchMove);
+  AWriter.Optimise := False;
+  AWriter.DataSet  := FDataSet;
 
-    end else if FWithFieldNames = fhmWithDuplicate then begin
-      //重複ヘッダがある場合
-
-      //メモリが二重化されるのでSetFieldNameAandTruncFields内でFreeする為所有権は設定しない
-      TempDataSet := TFDMemTable.Create(nil);
-
-      //テンポラリデータセットに再指定する
-      LWriter.DataSet := TempDataSet;
-      
-      LBatchMove.Mappings.Clear;
-      //仮に連番フィールドとして設定する
-      for i := 0 to FMaxFieldCount - 1 do begin
-        with LReader.DataDef.Fields.Add do begin
-          DataType := TFDtextDataType.atString;
-          FieldSize := FMaxLength;
-          FieldName := 'Field' + (i + 1).ToString;
-        end;
-
-        TempDataSet.FieldDefs.Add('Field' + (i + 1).ToString,TFieldType.ftWideString,FMaxLength);
-
-        with LBatchMove.Mappings.Add do begin
-          SourceFieldName      := LReader.DataDef.Fields[i].FieldName;
-          DestinationFieldName := TempDataSet.FieldDefs[i].Name;
-        end;
-      end;
-      TempDataSet.CreateDataSet;
-    end else begin
-      //ヘッダが無い場合
-      LBatchMove.Mappings.Clear;
-      for i := 0 to FFields.Count - 1 do begin
-        with LReader.DataDef.Fields.Add do begin
-          DataType := TFDtextDataType.atString;
-          FieldSize := FMaxLength;
-          FieldName := FFields[i];
-        end;
-
-        FDataSet.FieldDefs.Add(FFields[i],TFieldType.ftWideString,FMaxLength);
-
-        with LBatchMove.Mappings.Add do begin
-          SourceFieldName      := LReader.DataDef.Fields[i].FieldName;
-          DestinationFieldName := FDataSet.FieldDefs[i].Name;
-        end;
-      end;
-      FDataSet.CreateDataSet;
+  if FWithFieldNames = fhmFollow then begin
+    ABatchMove.GuessFormat;
+    for i := 0 to AReader.DataDef.Fields.Count - 1 do begin
+      AReader.DataDef.Fields[i].DataType  := TFDtextDataType.atString;
+      AReader.DataDef.Fields[i].FieldSize := FMaxLength;
     end;
+  end else if FWithFieldNames = fhmWithDuplicate then begin
+    ATempDataSet    := TFDMemTable.Create(nil);
+    AWriter.DataSet := ATempDataSet;
+    ABatchMove.Mappings.Clear;
+    for i := 0 to FMaxFieldCount - 1 do begin
+      with AReader.DataDef.Fields.Add do begin
+        DataType  := TFDtextDataType.atString;
+        FieldSize := FMaxLength;
+        FieldName := 'Field' + (i + 1).ToString;
+      end;
+      ATempDataSet.FieldDefs.Add(
+        'Field' + (i + 1).ToString, TFieldType.ftWideString, FMaxLength);
+      with ABatchMove.Mappings.Add do begin
+        SourceFieldName      := AReader.DataDef.Fields[i].FieldName;
+        DestinationFieldName := ATempDataSet.FieldDefs[i].Name;
+      end;
+    end;
+    ATempDataSet.CreateDataSet;
+  end else begin
+    ABatchMove.Mappings.Clear;
+    for i := 0 to FFields.Count - 1 do begin
+      with AReader.DataDef.Fields.Add do begin
+        DataType  := TFDtextDataType.atString;
+        FieldSize := FMaxLength;
+        FieldName := FFields[i];
+      end;
+      FDataSet.FieldDefs.Add(FFields[i], TFieldType.ftWideString, FMaxLength);
+      with ABatchMove.Mappings.Add do begin
+        SourceFieldName      := AReader.DataDef.Fields[i].FieldName;
+        DestinationFieldName := FDataSet.FieldDefs[i].Name;
+      end;
+    end;
+    FDataSet.CreateDataSet;
+  end;
 
-    //GuessFormatの影響を避けるため実行直前に設定
-    FDataSet.FormatOptions.StrsTrim          := FTrimSpace;
-    LReader.DataDef.TrimLeft                 := FTrimSpace;
-    LReader.DataDef.TrimRight                := FTrimSpace;
-    if assigned(tempDataSet) then
-      tempDataSet.FormatOptions.StrsTrim     := FTrimSpace;
+  // GuessFormat の影響を避けるため Execute 直前に Trim 系を設定
+  FDataSet.FormatOptions.StrsTrim := FTrimSpace;
+  AReader.DataDef.TrimLeft        := FTrimSpace;
+  AReader.DataDef.TrimRight       := FTrimSpace;
+  if Assigned(ATempDataSet) then
+    ATempDataSet.FormatOptions.StrsTrim := FTrimSpace;
+end;
+
+procedure TFDCSVAnalyzer.LoadCSVAsync(AFileName: TFileName);
+begin
+
+  FDataSet.DisableControls;
+
+  // 進捗カウンタ初期化
+  FReadCount  := 0;
+  FWriteCount := 0;
+  FPhase      := TFDBatchMovePhase(0);
+
+  // 実行中マーク
+  FDoneEvent.ResetEvent;
+
+  //BatchMove はメインスレッドで生成（destructor から AbortJob するため）
+  FRunningBatchMove := TFDBatchMove.Create(nil);
+  FRunningBatchMove.OnProgress := BatchMoveProgress;
+
+  try
+    TTask.Run(
+    procedure
+    var
+      LReader      : TFDBatchMoveTextReader;
+      LWriter      : TFDBatchMoveDataSetWriter;
+      LTempDataSet : TFDMemTable;
+      LHasError    : Boolean;
+      LErrMsg      : string;
+      LErrClass    : ExceptClass;
+    begin
+        LTempDataSet := nil;
+        LHasError    := False;
+      try
+        try
+          ConfigureBatchMove(FRunningBatchMove, AFileName, LReader, LWriter, LTempDataSet);
+          FRunningBatchMove.Execute;
+          if FWithFieldNames = fhmWithDuplicate then SetFieldNameAndTruncFields(LTempDataSet) else FDataSet.First;
+        except
+          on E: Exception do begin
+            LHasError := True;
+            LErrMsg   := E.Message;
+            LErrClass := ExceptClass(E.ClassType);
+            if Assigned(LTempDataSet) then FreeAndNil(LTempDataSet);
+          end;
+        end;
+
+        finally begin
+          TThread.Queue(nil, procedure
+          var
+            LExc: Exception;
+            LReraise  : Boolean;
+          begin
+            LReraise := False;
+            try
+              try
+                if not FDestroying then begin
+                  if Assigned(FDataSet) then FDataSet.EnableControls;
+
+                  if LHasError then begin
+                    if Assigned(FOnException) then begin
+                      // ハンドラあり → 通常ルート
+                      if LErrClass <> nil then
+                        LExc := LErrClass.Create(LErrMsg)
+                      else
+                        LExc := Exception.Create(LErrMsg);
+                      try
+                        DoException(Self, LExc);
+                      finally
+                        LExc.Free;
+                      end;
+                    end else begin
+                      // ハンドラなし → Sync版と同じく外へ投げる
+                      LReraise := True;
+                    end;
+                  end else begin
+
+
+                    DoComplete;
+                  end;
+                end;
+              except
+                // ユーザコールバック内例外は飲み込む
+              end;
+            finally
+              // ★ クリーンアップを先に終わらせる
+              FreeAndNil(FRunningBatchMove);
+              FDoneEvent.SetEvent;
+            end;
+
+            if LReraise and not FDestroying then begin
+              if LErrClass <> nil then
+                raise LErrClass.Create(LErrMsg)
+              else
+                raise Exception.Create(LErrMsg);
+            end;
+          end);
+        end;
+      end;
+    end);
+  except
+    FreeAndNil(FRunningBatchMove);
+    FDataSet.EnableControls;
+    FDoneEvent.SetEvent;
+    raise;
+  end;
+end;
+
+procedure TFDCSVAnalyzer.LoadCSVSync(AFileName: TFileName);
+var
+  LBatchMove: TFDBatchMove;
+  LReader: TFDBatchMoveTextReader;
+  LWriter: TFDBatchMoveDataSetWriter;
+  LTempDataSet : TFDMemTable;
+  IsError : boolean;
+begin
+
+
+
+  FDataSet.DisableControls;
+  LBatchMove := TFDBatchMove.Create(nil);
+
+  // 同期処理の場合はProgressを設定する意味がないのでNil固定
+  LBatchMove.OnProgress := nil;
+
+  isError := false;
+  try
+    ConfigureBatchMove(LBatchMove, AFileName, LReader, LWriter, LTempDataSet);
     try
       LBatchMove.Execute;
     except
-      if assigned(tempDataSet) then tempDataSet.Free;
-      raise;   //exit
+      on E: Exception do begin
+        isError := true;
+        if Assigned(LTempDataSet) then LTempDataSet.Free;
+        if Assigned(FOnException) then DoException(Self, E) else raise;
+      end;
     end;
-    if FWithFieldNames = fhmWithDuplicate then SetFieldNameAndTruncFields(tempDataSet) else FDataSet.First;
-
+    if FWithFieldNames = fhmWithDuplicate then SetFieldNameAndTruncFields(LTempDataSet) else FDataSet.First;
   finally
     LBatchMove.Free;
+    FDataSet.EnableControls;
+    if isError = false then DoComplete;
   end;
 end;
+
 
 procedure TFDCSVAnalyzer.SetFieldNameAndTruncFields(var ADataSet : TFDMemTable);
 var
   i,cnt : integer;
   Headers : TStringList;
   HeaderCount : TDictionary<string,integer>;
- 
+
   LBatchMove : TFDBatchMove;
   LWriter : TFDBatchMoveDataSetWriter;
   LReader : TFDBatchMoveDataSetReader;
@@ -288,7 +494,7 @@ begin
     //1行目を削除する（ヘッダのため）
     ADataSet.First;
     ADataSet.Delete;
-    
+
     //BatchMoveを利用してテンポラリから書き出す
     LBatchMove := TFDBatchMove.Create(nil);
     LReader := TFDBatchMoveDataSetReader.Create(LBatchMove);
@@ -296,7 +502,7 @@ begin
     try
       LReader.DataSet := ADataSet;
       LReader.Optimise := false;
-      
+
       LWriter.DataSet := FDataSet;
       LWriter.Optimise := false;
       ADataSet.FormatOptions.StrsTrim := TrimSpace;
@@ -313,7 +519,7 @@ begin
     finally
       FreeAndNil(LBatchMove);
     end;
-    
+
     FDataSet.First;
   finally
     FreeAndNil(Headers);
@@ -321,8 +527,8 @@ begin
     //テンポラリをFreeする
     FreeAndNil(ADataSet);
   end;
-  
-  
+
+
 end;
 
 procedure TFDCSVAnalyzer.SetFields(AFields: string);
@@ -330,8 +536,44 @@ begin
   FFields.Text := AFields;
 end;
 
+procedure TFDCSVAnalyzer.BatchMoveProgress(ASender: TObject;
+  APhase: TFDBatchMovePhase);
+var
+  BM : TFDBatchMove;
+  LReadCount : integer;
+  LWriteCount : integer;
+  LPhase : TFDBatchMovePhase;
+begin
+  if not (ASender is TFDBatchMove) then Exit;
+  BM := TFDBatchMove(ASender);
+  LReadCount := BM.ReadCount;
+  LWriteCount := BM.WriteCount;
+  LPhase := APhase;
+
+  if FAsync then begin
+    TThread.Queue(nil,procedure
+    begin
+      if FDestroying then Exit;
+      TInterlocked.Exchange(FReadCount,  LReadCount);
+      TInterlocked.Exchange(FWriteCount, LWriteCount);
+      TInterlocked.Exchange(Integer(FPhase), Integer(LPhase));  // enumをIntegerにcast
+      DoProgress(Self);
+    end);
+
+  end else begin
+
+    TInterlocked.Exchange(FReadCount,  LReadCount);
+    TInterlocked.Exchange(FWriteCount, LWriteCount);
+    TInterlocked.Exchange(Integer(FPhase), Integer(LPhase));  // enumをIntegerにcast
+    DoProgress(Self);
+  end;
+
+end;
+
 procedure TFDCSVAnalyzer.Clear;
 begin
+  if FDoneEvent.WaitFor(0) <> wrSignaled then raise Exception.Create('非同期実行中は Clear できません。');
+
   FDataSource.DataSet := nil;
   if Assigned(FDataSet) then begin
     FreeAndNil(FDataSet);

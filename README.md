@@ -14,6 +14,7 @@ VCL / FMX に依存しないため、コンソールアプリやサービス、�
   - 区切り文字変更可能
   - コンソール / サービス利用対応
   - TFDMemTable ベース(DataSet/DataSourceとして利用可能)
+  - **非同期(Async)読み込み対応** — 巨大ファイルを UI を止めずに読み込み可能
 >※日本語CSVの場合Shift-JIS（SJIS、CP932等）はFireDACの内部実装的に非対応です。
 >事前にUTF8（BOM付き）に変換してご利用ください。
 
@@ -30,6 +31,7 @@ Other Features
   - Configurable separator / delimiter
   - Console / service friendly
   - TFDMemTable based(DataSet/DataSource)
+  - **Async loading** — process huge files without blocking the UI thread
 > Note: Due to FireDAC's internal text parser behavior, legacy Japanese
 > encodings such as Shift-JIS / CP932 are **not reliably supported**.
 > Please convert your CSV files to UTF-8 (BOM recommended) before loading.
@@ -44,6 +46,8 @@ Other Features
 - **区切り文字、囲み文字、エンコーディング** をプロパティで指定可能
 - **最大フィールド長(`MaxLength`)を拡張** — 上位行に短いデータしかない場合に発生する文字の切り捨てを防止
 - **重複したヘッダを持つCSVにも対応**
+- **同期 / 非同期 切替可能** — `Async` プロパティ1つで切替、API (`LoadCSV`) は共通
+- **進捗イベント / 完了イベント / 例外イベント** — `OnProgress` / `OnComplete` / `OnException`
 - 単一ユニット (`FS.FireDAC.CSVReader.pas`) で完結
 - FireDACによるRFC4180準拠
 ---
@@ -71,7 +75,7 @@ uses
 
 ## 使い方 / Usage
 
-### 1. ヘッダー行ありの CSV を読み込む
+### 1. ヘッダー行ありの CSV を読み込む (同期)
 
 ```pascal
 var
@@ -152,6 +156,44 @@ Analyzer := TFDCSVAnalyzer.Create(nil, 8192);
 Analyzer.MaxLength := 8192;
 ```
 
+### 5. 非同期(Async)読み込み — UI を止めずに巨大ファイルを処理
+
+`Async := True` にすると `LoadCSV` は即座にリターンし、解析は `TTask` で別スレッド実行されます。
+進捗・完了・例外は専用イベントで受け取ります。同期版と完全に同じ API・同じ `DataSet` プロパティを使えます。
+OnProgressは必要な場合。OnProgressを設定した場合はProgressごとにイベントが発火するのでパフォーマンスが低下します。
+
+```pascal
+procedure TForm1.btnLoadClick(Sender: TObject);
+begin
+  FAnalyzer.Async        := True;       // 非同期モードに切替
+  FAnalyzer.OnProgress   := AnalyzerProgress; 
+  FAnalyzer.OnComplete   := AnalyzerComplete;
+  FAnalyzer.OnException  := AnalyzerException;
+
+  FAnalyzer.LoadCSV('C:\data\huge.csv');
+  // ← ここですぐ戻る。読み込みはバックグラウンドで進行
+  // ExceptionやFinallyも即評価されるのでAsyncの場合はOnCompleteかOnExceptionを利用してください。
+end;
+
+procedure TForm1.AnalyzerProgress(Sender: TObject);
+begin
+  // メインスレッドで呼ばれる（Queue 経由）
+  lblPhase.Caption := Format('Phase: %s  Rows: %d / %d',
+    [GetEnumName(TypeInfo(TFDBatchMovePhase), Ord(FAnalyzer.Phase)),
+     FAnalyzer.ReadCount, FAnalyzer.WriteCount]);
+end;
+
+procedure TForm1.AnalyzerComplete(Sender: TObject);
+begin
+  ShowMessage(Format('完了: %d 行', [FAnalyzer.DataSet.RecordCount]));
+end;
+
+procedure TForm1.AnalyzerException(Sender: TObject; AException: Exception);
+begin
+  ShowMessage('読み込みエラー: ' + AException.Message);
+end;
+```
+
 ---
 
 ## API リファレンス / API Reference
@@ -161,8 +203,8 @@ Analyzer.MaxLength := 8192;
 | メンバー | 種別 | 説明 |
 |---|---|---|
 | `Create(AOwner; MaxFieldLength = 1024; MaxFieldCount = 256)` | constructor | コンポーネントを生成 |
-| `LoadCSV(AFileName)` | method | CSV ファイルを読み込み `DataSet` に格納 |
-| `Clear` | method | `DataSet` の内容をクリア |
+| `LoadCSV(AFileName)` | method | CSV ファイルを読み込み `DataSet` に格納（`Async` プロパティで Sync/Async 切替） |
+| `Clear` | method | `DataSet` の内容をクリア（非同期実行中は例外） |
 | `SetFields(AFields)` | method | 改行区切り文字列でフィールド名を一括設定 |
 | `DataSet` | `TFDMemTable` (read) | 読み込み結果を保持するメモリテーブル |
 | `DataSource` | `TDataSource` (read) | 内部のDataSet（TFDMemTable）への参照を持ったDataSource |
@@ -171,11 +213,28 @@ Analyzer.MaxLength := 8192;
 | `MaxFieldCount` | `Integer` (property) | 重複ヘッダの場合、テンポラリとして一旦保存するカラム数 (既定 `256`) |
 | `TruncateField` | `boolean` (property) | 仮フィールドの切り捨てを行うかどうか (既定 `true`) |
 | `MaxLength` | `Integer` | 文字列フィールドの最大長 |
+| `Async` | `Boolean` (property) | 非同期実行モード切替 (既定 `false`) |
 | `Separator` | `Char` (published) | 区切り文字 (既定 `,`) |
 | `Delimiter` | `Char` (published) | 囲い文字 (既定 `"`) |
 | `WithFieldNames` | `Enum` (published) | 1 行目をヘッダーとして扱う/重複をリネームする/ヘッダを手動で設定する (既定 `ヘッダーとして扱う`) |
 | `DuplicatePrefix` | `string` | 重複時に連番の前に設定するプレフィックス |
 | `Encoding` | `TFDEncoding` (published) | エンコーディング (既定 `ecDefault` = OSデフォルトコードページ) |
+
+### イベント / Events
+
+| イベント | シグネチャ | 発火タイミング |
+|---|---|---|
+| `OnProgress` | `TNotifyEvent` | 読み込み進行中、`TFDBatchMove` から進捗が返るたびに発火。Async時はメインスレッドへ marshal 済み |
+| `OnComplete` | `TNotifyEvent` | 読み込み正常完了時 |
+| `OnException` | `procedure(ASender; AException: Exception)` | 読み込み中に例外発生時。未設定の場合は Sync は呼出し元へ raise、Async は `Application.HandleException` 経由 |
+
+### 進捗参照プロパティ / Progress properties (read-only)
+
+| プロパティ | 型 | 説明 |
+|---|---|---|
+| `ReadCount` | `Integer` | Reader (CSV) が読み込んだ行数 |
+| `WriteCount` | `Integer` | Writer (TFDMemTable) が書き込んだ行数 |
+| `Phase` | `TFDBatchMovePhase` | 現在の処理フェーズ |
 
 ### ヘッダモード / HeaderMode
 
@@ -192,16 +251,26 @@ Analyzer.MaxLength := 8192;
 |---|---|
 | 指定ファイルが存在しない | `EFileNotFoundException` |
 | `WithFieldNames = fhmManual` かつ `Fields` が空 | `Exception` |
+| 前回の Async 読み込みが完了していない状態で `LoadCSV` を呼んだ | `Exception` |
+| 非同期実行中に `Clear` を呼んだ | `Exception` |
+| 非同期読み込み中の解析エラー (`OnException` 未設定時) | `Application.HandleException` 経由で表示 |
 
-### 更新履歴
+---
+
+## 更新履歴
 
 | 説明 | 詳細 |
 |---|---|
-|重複ヘッダモードでヘッダに空欄を含むCSVを読み込んだ場合を考慮|TruncateFieldがFalseでヘッダが空欄の場合仮フィールド名をそのまま採用|
-|重複ヘッダ用に設定できるPrefixを追加|`dupHeader` `dupHeader` -> `dupHeader` `dupHeader__1`|
-|外部コンポーネント連携用にDataSetを永続化|直接外に出ていたDataSetをDataSourceでラップして参照に変更|
-|重複ヘッダモードの場合の利便性の為コンストラクタを変更|MaxFieldCountを指定できるよう変更 規定値256、大きなサイズが必要な場合はCreate時に指定|
-|WithFieldNamesを破壊的変更| boolean -> Enum(fhmFollow,fhmManual,fhmWithDuplicate)|
+| **非同期(Async)読み込みサポート** | `Async` プロパティで切替。`OnProgress` / `OnComplete` / `OnException` イベントを追加 |
+| **進捗参照プロパティ追加** | `ReadCount` / `WriteCount` / `Phase` を追加（読み取り専用） |
+| **巨大ファイル読み込み中の安全な破棄** | destructor で `AbortJob` を発行、`CheckSynchronize` ループで Queue を消化してから解放 |
+| **非同期時の例外伝播ポリシー整備** | `OnException` 未設定時は Sync版と同様に外へ raise（Async では `Application.HandleException` 経由） |
+| **共通処理を `ConfigureBatchMove` に抽出** | Sync / Async でドリフトが起きないよう Reader/Writer 構成部分を private メソッド化 |
+| 重複ヘッダモードでヘッダに空欄を含むCSVを読み込んだ場合を考慮 | TruncateFieldがFalseでヘッダが空欄の場合仮フィールド名をそのまま採用 |
+| 重複ヘッダ用に設定できるPrefixを追加 | `dupHeader` `dupHeader` -> `dupHeader` `dupHeader__1` |
+| 外部コンポーネント連携用にDataSetを永続化 | 直接外に出ていたDataSetをDataSourceでラップして参照に変更 |
+| 重複ヘッダモードの場合の利便性の為コンストラクタを変更 | MaxFieldCountを指定できるよう変更 規定値256、大きなサイズが必要な場合はCreate時に指定 |
+| WithFieldNamesを破壊的変更 | boolean -> Enum(fhmFollow,fhmManual,fhmWithDuplicate) |
 
 ### 参考ベンチマーク
 
@@ -269,8 +338,10 @@ It loads CSVs covering RFC 4180 edge cases, encoding variants, and line-ending v
 - 015 / 016 はリポジトリサイズを抑えるため**同梱していません**。パフォーマンス検証が必要な場合は別途生成してください。
 - 同梱していない CSV を選択すると、`LoadCSV` 内の `FileExists` チェックにより `EFileNotFoundException` で停止します。
 - ラージファイル + `ExportRowData` の組み合わせはメモへの大量書き込みで応答性が落ちるため、テストアプリ側でガードしています。
+- ラージファイル + Async モードで読み込み中にウィンドウを閉じても、destructor が `AbortJob` で即時中断し安全に終了します。
 
 015 / 016 are **not included** in the repository to keep its size small. Generate them locally if you need performance benchmarks. Selecting a missing file raises `EFileNotFoundException` inside `LoadCSV`. The harness also blocks the `ExportRowData` + large-file combination to avoid memo flooding.
+Closing the window while a large file is loading in Async mode is also safe — the destructor calls `AbortJob` and terminates the worker immediately.
 
 ---
 
