@@ -415,8 +415,6 @@ var
   IsError : boolean;
 begin
 
-
-
   FDataSet.DisableControls;
   LBatchMove := TFDBatchMove.Create(nil);
 
@@ -435,7 +433,9 @@ begin
         if Assigned(FOnException) then DoException(Self, E) else raise;
       end;
     end;
-    if FWithFieldNames = fhmWithDuplicate then SetFieldNameAndTruncFields(LTempDataSet) else FDataSet.First;
+
+    if isError = false then
+       if FWithFieldNames = fhmWithDuplicate then SetFieldNameAndTruncFields(LTempDataSet) else FDataSet.First;
   finally
     LBatchMove.Free;
     FDataSet.EnableControls;
