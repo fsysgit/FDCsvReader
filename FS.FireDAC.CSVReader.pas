@@ -414,7 +414,9 @@ var
   LTempDataSet : TFDMemTable;
   IsError : boolean;
 begin
-
+  FReadCount := 0;
+  FWriteCount := 0;
+  FPhase := TFDBatchMovePhase.psPreparing;
   FDataSet.DisableControls;
   LBatchMove := TFDBatchMove.Create(nil);
 
@@ -434,8 +436,14 @@ begin
       end;
     end;
 
-    if isError = false then
-       if FWithFieldNames = fhmWithDuplicate then SetFieldNameAndTruncFields(LTempDataSet) else FDataSet.First;
+    if isError = false then begin
+      if FWithFieldNames = fhmWithDuplicate then SetFieldNameAndTruncFields(LTempDataSet) else FDataSet.First;
+      //非同期版と挙動を合わせるためにリザルトを設定
+      FReadCount  := FDataSet.RecordCount;
+      FWriteCount := FDataSet.RecordCount;
+      FPhase := TFDBatchMovePhase.psFinishing;
+    end;
+
   finally
     LBatchMove.Free;
     FDataSet.EnableControls;
